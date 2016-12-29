@@ -56,8 +56,7 @@ int main(void)
 
     // Setup eUSCI_A0
     UCA0CTLW0 |= UCSWRST;                   // **Put state machine in reset**
-    UCA0CTLW0 |= UCSSEL_2;
-    UCA0CTL0 |= UCSPB;
+    UCA0CTLW0 |= UCSSEL_2 | UCSPB;
     UCA0BRW_L = 0x40;                       // 250k
     UCA0BRW_H = 0x00;                       //
     UCA0MCTLW = 0x00;                       //
@@ -66,8 +65,7 @@ int main(void)
 
     // Setup eUSCI_A1
     UCA1CTLW0 |= UCSWRST;                   // **Put state machine in reset**
-    UCA1CTLW0 |= UCSSEL_2;
-    UCA1CTL0 |= UCSPB;
+    UCA1CTLW0 |= UCSSEL_2 | UCSPB;
     UCA1BRW_L = 0x40;                       // 250k
     UCA1BRW_H = 0x00;                       //
     UCA1MCTLW = 0x00;                       //
@@ -76,8 +74,7 @@ int main(void)
 
     // Setup eUSCI_A2
     UCA2CTLW0 |= UCSWRST;                   // **Put state machine in reset**
-    UCA2CTLW0 |= UCSSEL_2;
-    UCA2CTL0 |= UCSPB;
+    UCA2CTLW0 |= UCSSEL_2 | UCSPB;
     UCA2BRW_L = 0x40;                       // 250k
     UCA2BRW_H = 0x00;                       //
     UCA2MCTLW = 0x00;                       //
