@@ -13,7 +13,6 @@
 //
 //******************************************************************************
 #include <msp430.h>
-#include <stdio.h>
 #include "driverlib.h"
 
 #define INLINE inline
