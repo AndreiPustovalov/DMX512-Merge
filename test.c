@@ -19,10 +19,12 @@
 
 #define SEND_INTERVAL 60000
 #define TX_FINISHED 1
+#define START_TX 2
+#define BYTE_TXED 3
 
 void setFreqDL();
 
-uint8_t tx = 0;
+uint8_t tx = 0, next_tx;
 uint8_t c_cur = 0x1, w_cur = 0xfe;
 uint8_t tx_state = 4;
 uint16_t time = 0;
@@ -70,7 +72,9 @@ int main(void)
     __bis_SR_register(GIE);     // interrupts enabled
     msg = TX_FINISHED;
     for (;;) {
-        switch (msg) {
+        uint8_t msg_loc = msg;
+        msg = 0;
+        switch (msg_loc) {
         case TX_FINISHED:
 			green_led_off();
 			++w_cur;
@@ -79,8 +83,32 @@ int main(void)
 		    TA1CCR0 = SEND_INTERVAL;
 		    TA1CTL |= MC_2 | TACLR;       // SMCLK, divider //contmode, clear TAR
         	break;
+        case START_TX:
+    		tx = 0;
+    		tx_state = 3;
+    		UCA0TXBUF = 0;
+    		/* no break */
+        case BYTE_TXED:
+			++tx;
+			switch (tx) {
+			case 1:
+				next_tx = c_cur;
+				break;
+			case 2:
+				next_tx = w_cur;
+				break;
+			case 17:
+				msg = TX_FINISHED;
+				break;
+			default:
+				next_tx = 0;
+				break;
+			}
+			break;
         }
-        __bis_SR_register(LPM3_bits);     // Enter LPM3, interrupts enabled
+        if (!msg) {
+        	__bis_SR_register(LPM3_bits);     // Enter LPM3, interrupts enabled
+        }
     }
 }
 
@@ -103,22 +131,9 @@ void __attribute__ ((interrupt(USCI_A0_VECTOR))) USCI_A0_ISR (void)
         }
         case USCI_UART_UCTXIFG:
         	if (tx_state == 3) {
-				++tx;
-				switch (tx) {
-				case 1:
-					UCA0TXBUF = c_cur;
-					break;
-				case 2:
-					UCA0TXBUF = w_cur;
-					break;
-				case 17:
-					msg = TX_FINISHED;
-					LPM3_EXIT;
-					break;
-				default:
-					UCA0TXBUF = 0;
-					break;
-				}
+        		UCA0TXBUF = next_tx;
+        		msg = BYTE_TXED;
+        		LPM3_EXIT;
         	}
         	break;      // TXIFG
         case USCI_UART_UCSTTIFG: break;     // TTIFG
@@ -164,15 +179,8 @@ void __attribute__ ((interrupt(TIMER1_A0_VECTOR))) TIMER1_A0_ISR (void)
 		break;
 	case 2:
 		TA1CTL &= ~(BIT5 | BIT6); //stop timer
-		tx = 0;
-		tx_state = 3;
-		UCA0TXBUF = 0;
-		break;
-	case 3:
-		yellow_led_on();
-		break;
-	default:
-		relay_on();
+		msg = START_TX;
+		LPM3_EXIT;
 		break;
 	}
 }
