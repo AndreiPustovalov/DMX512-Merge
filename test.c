@@ -69,7 +69,6 @@ int main(void)
     TA1CCR0 = SEND_INTERVAL;
     TA1CTL = TASSEL_2 | ID__8 | TACLR;       // SMCLK, divider //contmode, clear TAR
 
-    __bis_SR_register(GIE);     // interrupts enabled
     msg = TX_FINISHED;
     for (;;) {
         uint8_t msg_loc = msg;
@@ -84,12 +83,12 @@ int main(void)
 		    TA1CTL |= MC_2 | TACLR;       // SMCLK, divider //contmode, clear TAR
         	break;
         case START_TX:
-    		tx = 0;
     		tx_state = 3;
     		UCA0TXBUF = 0;
+    		tx = 0;
     		/* no break */
         case BYTE_TXED:
-			++tx;
+        	++tx;
 			switch (tx) {
 			case 1:
 				next_tx = c_cur;
@@ -105,9 +104,13 @@ int main(void)
 				break;
 			}
 			break;
+		default:
+			yellow_led_on();
         }
         if (!msg) {
-        	__bis_SR_register(LPM3_bits);     // Enter LPM3, interrupts enabled
+            __bis_SR_register(GIE);     // interrupts enabled
+        	LPM3;     // Enter LPM3, interrupts enabled
+            __bic_SR_register(GIE);     // interrupts disabled
         }
     }
 }
@@ -132,6 +135,7 @@ void __attribute__ ((interrupt(USCI_A0_VECTOR))) USCI_A0_ISR (void)
         case USCI_UART_UCTXIFG:
         	if (tx_state == 3) {
         		UCA0TXBUF = next_tx;
+    			++tx;
         		msg = BYTE_TXED;
         		LPM3_EXIT;
         	}
