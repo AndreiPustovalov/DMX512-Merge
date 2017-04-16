@@ -30,9 +30,11 @@ INLINE void relay_off();
 
 #define THREE_BYTES 8000
 
-unsigned char rx = 0, tx = 0;
-unsigned char c_cur = 0x0, w_cur = 0x0;
-unsigned char rx_time = 0, tx_time = 0;
+unsigned char rx1 = 0, rx2 = 0, tx = 0;
+unsigned char rx1_time = 0, rx2_time, tx_time = 0;
+unsigned char c1 = 0x0, w1 = 0x0, bra1 = 0x0;
+unsigned char c2 = 0x0, w2 = 0x0, bra2 = 0x0;
+unsigned char active = 0;
 
 char uart2_tx_buf[8];
 unsigned int uart2_tx_pos = 8;
@@ -103,44 +105,38 @@ void __attribute__ ((interrupt(USCI_A0_VECTOR))) USCI_A0_ISR (void)
 #error Compiler not supported!
 #endif
 {
-	static unsigned char c1 = 0x0, w1 = 0x0, bra1 = 0x0;
     switch (__even_in_range(UCA0IV, 4))
     {
         case USCI_NONE: break;              // No interrupt
         case USCI_UART_UCRXIFG:             // RXIFG
         {
         	char x = UCA0RXBUF;
-        	switch (rx) {
+        	switch (rx1) {
         	case 0:
         		break;
         	case 3:
         		if (x != c1) {
-        			c_cur = x;
         			c1 = x;
+        			active = 0;
         		}
         		break;
         	case 4:
         		if (x != w1) {
-        			w_cur = x;
         			w1 = x;
+        			active = 0;
         		}
         		break;
         	case 7:
         		if (x != bra1) {
-        			if (x > bra1) {
-        				relay_on();
-        			} else {
-        				relay_off();
-        			}
+        			active = 0;
         			bra1 = x;
         		}
         		break;
         	case 16:
-        		yellow_led_on();
         		break;
         	}
-        	++rx;
-        	rx_time = 0;
+        	++rx1;
+        	rx1_time = 0;
             break;
         }
         case USCI_UART_UCTXIFG:
@@ -149,10 +145,16 @@ void __attribute__ ((interrupt(USCI_A0_VECTOR))) USCI_A0_ISR (void)
         	switch (tx) {
         	case 1:
         		tx_time = 0;
-        		UCA0TXBUF = c_cur;
+        		if (active)
+        			UCA0TXBUF = c2;
+        		else
+        			UCA0TXBUF = c1;
         		break;
         	case 2:
-        		UCA0TXBUF = w_cur;
+        		if (active)
+        			UCA0TXBUF = w2;
+        		else
+        			UCA0TXBUF = w1;
         		break;
         	case 17:
         		break;
@@ -185,7 +187,38 @@ void __attribute__ ((interrupt(USCI_A1_VECTOR))) USCI_A1_ISR (void)
     {
         case USCI_NONE: break;              // No interrupt
         case USCI_UART_UCRXIFG:             // RXIFG
+        {
+        	char x = UCA1RXBUF;
+        	switch (rx2) {
+        	case 0:
+        		yellow_led_off();
+        		break;
+        	case 3:
+        		if (x != c2) {
+        			c2 = x;
+        			active = 1;
+        		}
+        		break;
+        	case 4:
+        		if (x != w2) {
+        			w2 = x;
+        			active = 1;
+        		}
+        		break;
+        	case 7:
+        		if (x != bra2) {
+        			active = 1;
+        			bra2 = x;
+        		}
+        		break;
+        	case 16:
+        		yellow_led_on();
+        		break;
+        	}
+        	++rx2;
+        	rx2_time = 0;
             break;
+        }
         case USCI_UART_UCTXIFG:
         	break;      // TXIFG
         case USCI_UART_UCSTTIFG: break;     // TTIFG
@@ -243,10 +276,15 @@ void __attribute__ ((interrupt(TIMER1_A0_VECTOR))) TIMER1_A0_ISR (void)
 #endif
 {
 	++tx_time;
-	++rx_time;
-	if (rx_time == 3) {
-		rx_time = 0;
-		rx = 0;
+	++rx1_time;
+	if (rx1_time == 3) {
+		rx1_time = 0;
+		rx1 = 0;
+	}
+	++rx2_time;
+	if (rx2_time == 3) {
+		rx2_time = 0;
+		rx2 = 0;
 	}
 	switch (tx_time & 0x3f) {
 	case 61:
