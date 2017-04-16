@@ -113,24 +113,24 @@ void __attribute__ ((interrupt(USCI_A0_VECTOR))) USCI_A0_ISR (void)
         	switch (rx) {
         	case 0:
         		break;
-        	case 2:
+        	case 3:
         		if (x != c1) {
         			c_cur = x;
         			c1 = x;
         		}
         		break;
-        	case 3:
+        	case 4:
         		if (x != w1) {
         			w_cur = x;
         			w1 = x;
         		}
         		break;
-        	case 6:
+        	case 7:
         		if (x != bra1) {
         			if (x > bra1) {
-//        				P1OUT |= BIT0;
+        				relay_on();
         			} else {
-//        				P1OUT &= ~BIT0;
+        				relay_off();
         			}
         			bra1 = x;
         		}
@@ -147,17 +147,13 @@ void __attribute__ ((interrupt(USCI_A0_VECTOR))) USCI_A0_ISR (void)
         	if (!get_green_state())
         		break;
         	switch (tx) {
-        	case 4:
-        	case 2:
-        		UCA0TXBUF = c_cur;
-        		break;
-        	case 5:
-        	case 3:
-        		UCA0TXBUF = w_cur;
-        		break;
         	case 1:
         		tx_time = 0;
-        		UCA0TXBUF = 0;
+        		UCA0TXBUF = c_cur;
+        		break;
+        	case 2:
+        		UCA0TXBUF = w_cur;
+        		break;
         	case 17:
         		break;
         	default:
@@ -264,13 +260,13 @@ void __attribute__ ((interrupt(TIMER1_A0_VECTOR))) TIMER1_A0_ISR (void)
 		tx = 1;
 		green_led_on();
 		UCA0TXBUF = 0;
-		{
-			int r = snprintf(uart2_tx_buf, 8, "%d %d\r\n", c_cur, w_cur);
-			if (r > 0 && r <= 8) {
-				uart2_tx_pos = 1;
-				UCA2TXBUF = uart2_tx_buf[0];
-			}
-		}
+//		{
+//			int r = snprintf(uart2_tx_buf, 8, "%d %d\r\n", c_cur, w_cur);
+//			if (r > 0 && r <= 8) {
+//				uart2_tx_pos = 1;
+//				UCA2TXBUF = uart2_tx_buf[0];
+//			}
+//		}
 		break;
 	}
 }
