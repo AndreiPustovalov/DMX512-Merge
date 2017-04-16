@@ -113,6 +113,11 @@ void __attribute__ ((interrupt(USCI_A0_VECTOR))) USCI_A0_ISR (void)
         	char x = UCA0RXBUF;
         	switch (rx1) {
         	case 0:
+        	case 1:
+        		if (x != 0) {
+        			rx1 = 16;
+        		}
+        	case 2:
         		break;
         	case 3:
         		if (x != c1) {
@@ -128,6 +133,11 @@ void __attribute__ ((interrupt(USCI_A0_VECTOR))) USCI_A0_ISR (void)
         		break;
         	case 7:
         		if (x != bra1) {
+        			if (x > bra1) {
+        				relay_on();
+        			} else {
+        				relay_off();
+        			}
         			active = 0;
         			bra1 = x;
         		}
@@ -191,7 +201,9 @@ void __attribute__ ((interrupt(USCI_A1_VECTOR))) USCI_A1_ISR (void)
         	char x = UCA1RXBUF;
         	switch (rx2) {
         	case 0:
+        	case 1:
         		yellow_led_off();
+        	case 2:
         		break;
         	case 3:
         		if (x != c2) {
@@ -207,6 +219,11 @@ void __attribute__ ((interrupt(USCI_A1_VECTOR))) USCI_A1_ISR (void)
         		break;
         	case 7:
         		if (x != bra2) {
+        			if (x > bra2) {
+        				relay_on();
+        			} else {
+        				relay_off();
+        			}
         			active = 1;
         			bra2 = x;
         		}
