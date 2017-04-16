@@ -32,9 +32,9 @@ INLINE void relay_off();
 
 unsigned char rx1 = 0, rx2 = 0, tx = 0;
 unsigned char rx1_time = 0, rx2_time, tx_time = 0;
-unsigned char c1 = 0x0, w1 = 0x0, bra1 = 0x0;
-unsigned char c2 = 0x0, w2 = 0x0, bra2 = 0x0;
-unsigned char active = 0;
+unsigned char ch1[3];
+unsigned char ch2[3];
+unsigned char* cur_ch = ch1;
 
 char uart2_tx_buf[8];
 unsigned int uart2_tx_pos = 8;
@@ -105,6 +105,7 @@ void __attribute__ ((interrupt(USCI_A0_VECTOR))) USCI_A0_ISR (void)
 #error Compiler not supported!
 #endif
 {
+	static unsigned char gist = 0;
     switch (__even_in_range(UCA0IV, 4))
     {
         case USCI_NONE: break;              // No interrupt
@@ -115,25 +116,35 @@ void __attribute__ ((interrupt(USCI_A0_VECTOR))) USCI_A0_ISR (void)
         	case 0:
         		break;
         	case 3:
-        		if (x != c1) {
-        			c1 = x;
-        			active = 0;
+        		if (ch1[0] != x) {
+        			++gist;
+        		}
+        		if (ch1 == cur_ch) {
+        			ch1[0] = x;
         		}
         		break;
         	case 4:
-        		if (x != w1) {
-        			w1 = x;
-        			active = 0;
+        		if (ch1[1] != x) {
+        			++gist;
+        		}
+        		if (ch1 == cur_ch) {
+        			ch1[1] = x;
         		}
         		break;
         	case 7:
-        		if (x != bra1) {
-        			active = 0;
-        			bra1 = x;
+        		if (ch1[2] != x) {
+        			++gist;
+        		}
+        		if (ch1 == cur_ch) {
+        			ch1[2] = x;
         		}
         		break;
         	case 16:
         		break;
+        	}
+        	if (gist == 6) {
+        		cur_ch = ch1;
+        		gist = 0;
         	}
         	++rx1;
         	rx1_time = 0;
@@ -145,16 +156,10 @@ void __attribute__ ((interrupt(USCI_A0_VECTOR))) USCI_A0_ISR (void)
         	switch (tx) {
         	case 1:
         		tx_time = 0;
-        		if (active)
-        			UCA0TXBUF = c2;
-        		else
-        			UCA0TXBUF = c1;
+				UCA0TXBUF = cur_ch[0];
         		break;
         	case 2:
-        		if (active)
-        			UCA0TXBUF = w2;
-        		else
-        			UCA0TXBUF = w1;
+				UCA0TXBUF = cur_ch[1];
         		break;
         	case 17:
         		break;
@@ -183,6 +188,7 @@ void __attribute__ ((interrupt(USCI_A1_VECTOR))) USCI_A1_ISR (void)
 #error Compiler not supported!
 #endif
 {
+	static unsigned char gist = 0;
     switch (__even_in_range(UCA1IV, 4))
     {
         case USCI_NONE: break;              // No interrupt
@@ -194,21 +200,27 @@ void __attribute__ ((interrupt(USCI_A1_VECTOR))) USCI_A1_ISR (void)
         		yellow_led_off();
         		break;
         	case 3:
-        		if (x != c2) {
-        			c2 = x;
-        			active = 1;
+        		if (ch2[0] != x) {
+        			++gist;
+        		}
+        		if (ch2 == cur_ch) {
+        			ch2[0] = x;
         		}
         		break;
         	case 4:
-        		if (x != w2) {
-        			w2 = x;
-        			active = 1;
+        		if (ch2[1] != x) {
+        			++gist;
+        		}
+        		if (ch2 == cur_ch) {
+        			ch2[1] = x;
         		}
         		break;
         	case 7:
-        		if (x != bra2) {
-        			active = 1;
-        			bra2 = x;
+        		if (ch2[2] != x) {
+        			++gist;
+        		}
+        		if (ch2 == cur_ch) {
+        			ch2[2] = x;
         		}
         		break;
         	case 16:
@@ -217,6 +229,10 @@ void __attribute__ ((interrupt(USCI_A1_VECTOR))) USCI_A1_ISR (void)
         	}
         	++rx2;
         	rx2_time = 0;
+        	if (gist == 6) {
+        		cur_ch = ch1;
+        		gist = 0;
+        	}
             break;
         }
         case USCI_UART_UCTXIFG:
