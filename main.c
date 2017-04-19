@@ -113,10 +113,10 @@ void __attribute__ ((interrupt(USCI_A0_VECTOR))) USCI_A0_ISR (void)
         	char x = UCA0RXBUF;
         	switch (rx1) {
         	case 0:
-        	case 1:
         		if (x != 0) {
         			rx1 = 16;
         		}
+        	case 1:
         	case 2:
         		break;
         	case 3:
@@ -201,8 +201,11 @@ void __attribute__ ((interrupt(USCI_A1_VECTOR))) USCI_A1_ISR (void)
         	char x = UCA1RXBUF;
         	switch (rx2) {
         	case 0:
-        	case 1:
+        		if (x != 0) {
+        			rx2 = 16;
+        		}
         		yellow_led_off();
+        	case 1:
         	case 2:
         		break;
         	case 3:
