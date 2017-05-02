@@ -11,44 +11,44 @@
 
 #define INLINE inline
 
-INLINE void set_uart_mode() {
-	P1SEL |= BIT3;
-}
+#define set_uart_mode() \
+	P1SEL |= BIT3
 
-INLINE void pin_down() {
-	P1SEL &= ~BIT3;
-}
 
-INLINE void green_led_on() {
-	P2OUT |= BIT6;
-}
+#define pin_down() \
+	P1SEL &= ~BIT3
 
-INLINE void green_led_off() {
-	P2OUT &= ~BIT6;
-}
 
-INLINE void yellow_led_on() {
-	P2OUT |= BIT5;
-}
+#define green_led_on() \
+	P2OUT |= BIT6
 
-INLINE void yellow_led_off() {
-	P2OUT &= ~BIT5;
-}
 
-INLINE void yellow_led_toggle() {
-	P2OUT ^= BIT5;
-}
+#define green_led_off() \
+	P2OUT &= ~BIT6
 
-INLINE void relay_on() {
-	P1OUT |= BIT6;
-}
 
-INLINE void relay_off() {
-	P1OUT &= ~BIT6;
-}
+#define yellow_led_on() \
+	P2OUT |= BIT5
 
-INLINE int get_green_state() {
-	return P2OUT | BIT6;
-}
 
+#define yellow_led_off() \
+	P2OUT &= ~BIT5
+
+
+#define relay_on() \
+	P1OUT |= BIT6
+
+
+#define relay_off() \
+	P1OUT &= ~BIT6
+
+
+#define get_green_state() \
+	(P2OUT | BIT6)
+
+#define rs485_rx() \
+	P2OUT &= ~BIT4
+
+#define rs485_tx() \
+	P2OUT |= BIT4
 #endif /* PERIPHERY_H_ */

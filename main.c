@@ -14,19 +14,10 @@
 //******************************************************************************
 #include <msp430.h>
 #include "driverlib.h"
-
-#define INLINE inline
+#include "periphery.h"
+#include "crc.h"
 
 void setFreqDL();
-INLINE void set_uart_mode();
-INLINE void pin_down();
-INLINE void green_led_on();
-INLINE void green_led_off();
-INLINE int get_green_state();
-INLINE void yellow_led_on();
-INLINE void yellow_led_off();
-INLINE void relay_on();
-INLINE void relay_off();
 
 #define THREE_BYTES 8000
 
@@ -34,10 +25,8 @@ unsigned char rx1 = 0, rx2 = 0, tx = 0;
 unsigned char rx1_time = 0, rx2_time, tx_time = 0;
 unsigned char c1 = 0x0, w1 = 0x0, bra1 = 0x0;
 unsigned char c2 = 0x0, w2 = 0x0, bra2 = 0x0;
+unsigned char c3 = 0x0, w3 = 0x0;
 unsigned char active = 0;
-
-char uart2_tx_buf[8];
-unsigned int uart2_tx_pos = 8;
 
 int main(void)
 {
@@ -155,16 +144,30 @@ void __attribute__ ((interrupt(USCI_A0_VECTOR))) USCI_A0_ISR (void)
         	switch (tx) {
         	case 1:
         		tx_time = 0;
-        		if (active)
-        			UCA0TXBUF = c2;
-        		else
+        		switch (active) {
+        		case 0:
         			UCA0TXBUF = c1;
+        			break;
+        		case 1:
+        			UCA0TXBUF = c2;
+        			break;
+        		case 2:
+        			UCA0TXBUF = c3;
+        			break;
+        		}
         		break;
         	case 2:
-        		if (active)
-        			UCA0TXBUF = w2;
-        		else
+        		switch (active) {
+        		case 0:
         			UCA0TXBUF = w1;
+        			break;
+        		case 1:
+        			UCA0TXBUF = w2;
+        			break;
+        		case 2:
+        			UCA0TXBUF = w3;
+        			break;
+        		}
         		break;
         	case 17:
         		break;
@@ -247,6 +250,26 @@ void __attribute__ ((interrupt(USCI_A1_VECTOR))) USCI_A1_ISR (void)
     }
 }
 
+#define CMD_GETACTIVE 1
+#define CMD_SET 2
+#define STATE_IDLE 3
+#define STATE_RX_SET 4
+#define STATE_RX_CH1 5
+#define STATE_RX_CH2 6
+#define STATE_RX_CRC 7
+#define STATE_TX_CMDSET 8
+#define STATE_TX_CMDGETACTIVE 9
+#define STATE_TX_ACTIVE 10
+#define STATE_TX_CRC 11
+#define STATE_TX_STATUS_OK 14
+#define STATE_RX_GETACTIVE 12
+#define STATE_ERROR 13
+#define STATE_TX_FINISH 15
+
+unsigned char state = STATE_IDLE;
+unsigned char rx_crc = 0;
+unsigned char tx_crc = 0;
+
 // USCI_A2 interrupt service routine
 #if defined(__TI_COMPILER_VERSION__) || defined(__IAR_SYSTEMS_ICC__)
 #pragma vector=USCI_A2_VECTOR
@@ -257,14 +280,81 @@ void __attribute__ ((interrupt(USCI_A2_VECTOR))) USCI_A2_ISR (void)
 #error Compiler not supported!
 #endif
 {
+	static unsigned char ch1, ch2;
+
     switch (__even_in_range(UCA2IV, 4))
     {
         case USCI_NONE: break;              // No interrupt
         case USCI_UART_UCRXIFG:             // RXIFG
-            break;
+        {
+        	unsigned char x = UCA2RXBUF;
+        	rx_crc = crc8LUT[x ^ rx_crc];
+        	switch (state) {
+        	case STATE_IDLE:
+        		switch (x) {
+        		case CMD_GETACTIVE:
+        			state = STATE_RX_GETACTIVE;
+        			break;
+        		case CMD_SET:
+        			state = STATE_RX_SET;
+        			break;
+        		default:
+        			state = STATE_ERROR;
+        			break;
+        		}
+        		break;
+			case STATE_RX_SET:
+				ch1 = x;
+				state = STATE_RX_CH1;
+				break;
+			case STATE_RX_CH1:
+				ch2 = x;
+				state = STATE_RX_CH2;
+				break;
+			case STATE_RX_CH2:
+				if (rx_crc) {
+					state = STATE_ERROR;
+				} else {
+					rs485_tx();
+					c3 = ch1;
+					w3 = ch2;
+					active = 2;
+					state = STATE_TX_STATUS_OK;
+					UCA2TXBUF = CMD_SET;
+					tx_crc = crc8LUT[CMD_SET ^ 0];
+				}
+				rx_crc = 0;
+				break;
+			case STATE_RX_GETACTIVE:
+				if (rx_crc) {
+					state = STATE_ERROR;
+				} else {
+					rs485_tx();
+					state = STATE_TX_ACTIVE;
+					rx_crc = 0;
+					tx_crc = crc8LUT[CMD_GETACTIVE ^ 0];
+					UCA2TXBUF = CMD_GETACTIVE;
+				}
+				break;
+        	}
+        }
+		break;
         case USCI_UART_UCTXIFG:
-        	if (uart2_tx_pos < 8) {
-        		UCA2TXBUF = uart2_tx_buf[uart2_tx_pos++];
+        	switch (state) {
+        	case STATE_TX_ACTIVE:
+        		UCA2TXBUF = active;
+        		tx_crc = crc8LUT[active ^ tx_crc];
+        		state = STATE_TX_CRC;
+        		break;
+        	case STATE_TX_STATUS_OK:
+        		UCA2TXBUF = 0;
+        		tx_crc = crc8LUT[0 ^ tx_crc];
+        		state = STATE_TX_CRC;
+        		break;
+        	case STATE_TX_CRC:
+        		UCA2TXBUF = tx_crc;
+        		state = STATE_TX_FINISH;
+        		break;
         	}
         	break;      // TXIFG
         case USCI_UART_UCSTTIFG: break;     // TTIFG
@@ -295,6 +385,19 @@ void __attribute__ ((interrupt(TIMER1_A0_VECTOR))) TIMER1_A0_ISR (void)
 #error Compiler not supported!
 #endif
 {
+	static unsigned char in_err = 200;
+	if (STATE_IDLE != state) {
+		--in_err;
+		if (!in_err) {
+			state = STATE_IDLE;
+			in_err = 200;
+			tx_crc = 0;
+			rx_crc = 0;
+    		rs485_rx();
+		}
+	} else {
+		in_err = 200;
+	}
 	++tx_time;
 	++rx1_time;
 	if (rx1_time == 3) {
@@ -318,13 +421,6 @@ void __attribute__ ((interrupt(TIMER1_A0_VECTOR))) TIMER1_A0_ISR (void)
 		tx = 1;
 		green_led_on();
 		UCA0TXBUF = 0;
-//		{
-//			int r = snprintf(uart2_tx_buf, 8, "%d %d\r\n", c_cur, w_cur);
-//			if (r > 0 && r <= 8) {
-//				uart2_tx_pos = 1;
-//				UCA2TXBUF = uart2_tx_buf[0];
-//			}
-//		}
 		break;
 	}
 }
@@ -373,41 +469,4 @@ void setFreqDL() {
     // Enable global oscillator fault flag
     SFR_clearInterrupt(SFR_OSCILLATOR_FAULT_INTERRUPT);
     SFR_enableInterrupt(SFR_OSCILLATOR_FAULT_INTERRUPT);
-}
-
-INLINE void set_uart_mode() {
-	P1SEL |= BIT3;
-}
-
-INLINE void pin_down() {
-	P1OUT &= ~BIT3;
-	P1SEL &= ~BIT3;
-}
-
-INLINE void green_led_on() {
-	P2OUT |= BIT6;
-}
-
-INLINE void green_led_off() {
-	P2OUT &= ~BIT6;
-}
-
-INLINE void yellow_led_on() {
-	P2OUT |= BIT5;
-}
-
-INLINE void yellow_led_off() {
-	P2OUT &= ~BIT5;
-}
-
-INLINE void relay_on() {
-	P1OUT |= BIT6;
-}
-
-INLINE void relay_off() {
-	P1OUT &= ~BIT6;
-}
-
-INLINE int get_green_state() {
-	return P2OUT | BIT6;
 }
